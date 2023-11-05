@@ -17,3 +17,6 @@ It checks for the following, with the accompanying code:
 
 
 If something is caught, a line will be printed to stdout with the path of the file, the line number, and the style code with an appropriate message.
+
+## Instructions
+After cloning this repo, navigate to the directory where the code is located, and run `python3 main.py <to-check>`, where `to-check` is any directory or Python file that you want to check the style of.
