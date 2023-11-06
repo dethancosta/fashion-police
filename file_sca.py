@@ -221,7 +221,7 @@ class FileSCA:
             defaults_visitor.visit(tree)
             if len(defaults_visitor.info) > 0:
                 for default, line_num in defaults_visitor.info.items():
-                    msg = f'{self.file_name}: Line {line_num}: S012 Default argument value is mutable'
+                    msg = f'{self.file_name}: Line {line_num+1}: S012 Default argument value is mutable'
                     self.errors.append((line_num, msg))
 
             for line in lines:

@@ -15,7 +15,7 @@ It checks for the following, with the accompanying code:
 - S011: Variables declared inside functions should be in snake_case
 - S012: Default arguments in functions should not be mutable objects
 
-![fashionpolice](https://media.giphy.com/media/nzDKWl7WenT7o1bCdk/giphy.gif)
+![fashionpolice](https://media.giphy.com/media/0cGzPNCpWWtGk5f1l8/giphy.gif)
 
 If something is caught, a line will be printed to stdout with the path of the file, the line number, and the style code with an appropriate message.
 
