@@ -1,51 +1,35 @@
 import ast
 import os.path
 import re
-from typing import List, Callable, Any, Tuple
+from typing import List, Callable, Tuple
 
 
-class VarNameVisitor(ast.NodeVisitor):
+class AstVisitor(ast.NodeVisitor):
     def __init__(self):
-        self.linenum = None
-        self.var_info = {}
+        self.vars: dict = {}
+        self.arguments: dict = {}
+        self.mut_defaults: set = set()
 
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> Any:
-        self.linenum = node.lineno
+    def visit_FunctionDef(self, node):
+        for arg in node.args.args:
+            self.arguments[node.lineno] = arg.arg
+        for arg in node.args.defaults:
+            if not isinstance(arg, ast.Constant):
+                self.mut_defaults.add(arg.lineno)
         self.generic_visit(node)
 
-    def visit_Assign(self, node: ast.Assign) -> Any:
-        if self.linenum:
-            for target in node.targets:
-                if isinstance(target, ast.Name):
-                    self.var_info[target.id] = target.lineno + self.linenum - 1
+    def visit_AsyncFunctionDef(self, node):
+        for arg in node.args.args:
+            self.arguments[node.lineno] = arg.arg
+        for arg in node.args.defaults:
+            if not isinstance(arg, ast.Constant):
+                self.mut_defaults.add(arg.lineno)
         self.generic_visit(node)
 
-class ArgVisitor(ast.NodeVisitor):
-    def __init__(self):
-        self.argument_info = {}
-
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> Any:
-        for arg in node.args.args:
-            self.argument_info[arg.arg] = arg.lineno
-
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> Any:
-        for arg in node.args.args:
-            self.argument_info[arg.arg] = arg.lineno
-
-
-class DefaultArgVisitor(ast.NodeVisitor):
-    def __init__(self):
-        self.info = {}
-
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> Any:
-        if len(node.args.defaults) == 0:
-            return
-        args = node.args.args
-        if len(args) > len(node.args.defaults):
-            args = args[:-len(node.args.defaults)]
-        for arg, default in zip(args, node.args.defaults):
-            if not isinstance(default, ast.Constant):
-                self.info[arg] = node.lineno-8
+    def visit_Name(self, node):
+        if isinstance(node.ctx, ast.Store):
+            self.vars[node.lineno] = node.id
+        self.generic_visit(node)
 
 
 class StyleChecker:
@@ -201,28 +185,22 @@ class FileSCA:
         line_count = 0
         with open(self.file_name) as f:
             lines = [line for line in f]
-            tree = ast.parse('\n'.join(lines))
+            f.seek(0)
+            tree = ast.parse(f.read())
 
-            var_visitor = VarNameVisitor()
-            var_visitor.visit(tree)
-            for var, line_num in var_visitor.var_info.items():
+            ast_visitor = AstVisitor()
+            ast_visitor.visit(tree)
+            for line_num, var in ast_visitor.vars.items():
                 if not is_snakecase(var):
                     msg = f'{self.file_name}: Line {line_num}: S011 Variable \'{var}\' in function should be snake_case'
                     self.errors.append((line_num, msg))
-
-            arg_visitor = ArgVisitor()
-            arg_visitor.visit(tree)
-            for arg, line_num in arg_visitor.argument_info.items():
+            for line_num, arg in ast_visitor.arguments.items():
                 if not is_snakecase(arg):
-                    msg = f'{self.file_name}: Line {line_num-1}: S010 Argument name \'{arg}\' should be snake_case'
+                    msg = f'{self.file_name}: Line {line_num}: S010 Argument name \'{arg}\' should be snake_case'
                     self.errors.append((line_num, msg))
-
-            defaults_visitor = DefaultArgVisitor()
-            defaults_visitor.visit(tree)
-            if len(defaults_visitor.info) > 0:
-                for default, line_num in defaults_visitor.info.items():
-                    msg = f'{self.file_name}: Line {line_num+1}: S012 Default argument value is mutable'
-                    self.errors.append((line_num, msg))
+            for line_num in ast_visitor.mut_defaults:
+                msg = f'{self.file_name}: Line {line_num}: S012 Default argument value is mutable'
+                self.errors.append((line_num, msg))
 
             for line in lines:
                 line_count += 1
@@ -236,3 +214,4 @@ class FileSCA:
 
                 self.blank_count = 0
         self.errors.sort(key=lambda x: x[0])
+
